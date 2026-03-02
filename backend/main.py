@@ -1,0 +1,85 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import anthropic
+
+from config import API_KEY, MODEL_NAME, MAX_CHARACTERS, MAX_LINES, SUPPORTED_LANGUAGES
+from prompts import get_translation_prompt
+
+app = FastAPI()
+
+# Allow frontend to talk to backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# This defines what the frontend must send us
+class TranslationRequest(BaseModel):
+    source_lang: str
+    target_lang: str
+    code: str
+
+# This defines what we send back to the frontend
+class TranslationResponse(BaseModel):
+    translated_code: str
+    source_lang: str
+    target_lang: str
+
+@app.get("/")
+def root():
+    return {"status": "Code translator backend is running"}
+
+@app.get("/languages")
+def get_languages():
+    return {"languages": SUPPORTED_LANGUAGES}
+
+@app.post("/translate", response_model=TranslationResponse)
+def translate_code(request: TranslationRequest):
+    
+    # Validate languages
+    if request.source_lang not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported source language: {request.source_lang}")
+    
+    if request.target_lang not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported target language: {request.target_lang}")
+    
+    if request.source_lang == request.target_lang:
+        raise HTTPException(status_code=400, detail="Source and target languages must be different")
+
+    # Validate input size
+    if len(request.code) > MAX_CHARACTERS:
+        raise HTTPException(status_code=400, detail=f"Code exceeds maximum character limit of {MAX_CHARACTERS}")
+    
+    if len(request.code.splitlines()) > MAX_LINES:
+        raise HTTPException(status_code=400, detail=f"Code exceeds maximum line limit of {MAX_LINES}")
+
+    # Build the prompt
+    try:
+        prompt = get_translation_prompt(request.source_lang, request.target_lang, request.code)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Call the Anthropic API
+    try:
+        client = anthropic.Anthropic(api_key=API_KEY)
+        message = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=4096,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+        translated_code = message.content[0].text
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
+
+    return TranslationResponse(
+        translated_code=translated_code,
+        source_lang=request.source_lang,
+        target_lang=request.target_lang
+    )
