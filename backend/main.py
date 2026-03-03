@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import anthropic
 
-from config import API_KEY, MODEL_NAME, MAX_CHARACTERS, MAX_LINES, SUPPORTED_LANGUAGES
+from config import API_KEY, MODEL_NAME, MAX_CHARACTERS, MAX_LINES, SUPPORTED_LANGUAGES, VALID_PAIRS
 from prompts import get_translation_prompt
 
 app = FastAPI()
@@ -37,23 +37,30 @@ def root():
 def get_languages():
     return {"languages": SUPPORTED_LANGUAGES}
 
+@app.get("/pairs")
+def get_pairs():
+    return {"pairs": VALID_PAIRS}
+
 @app.post("/translate", response_model=TranslationResponse)
 def translate_code(request: TranslationRequest):
-    
+
     # Validate languages
     if request.source_lang not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported source language: {request.source_lang}")
-    
+
     if request.target_lang not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported target language: {request.target_lang}")
-    
+
     if request.source_lang == request.target_lang:
         raise HTTPException(status_code=400, detail="Source and target languages must be different")
+
+    if request.target_lang not in VALID_PAIRS.get(request.source_lang, []):
+        raise HTTPException(status_code=400, detail=f"Translation from {request.source_lang} to {request.target_lang} is not supported")
 
     # Validate input size
     if len(request.code) > MAX_CHARACTERS:
         raise HTTPException(status_code=400, detail=f"Code exceeds maximum character limit of {MAX_CHARACTERS}")
-    
+
     if len(request.code.splitlines()) > MAX_LINES:
         raise HTTPException(status_code=400, detail=f"Code exceeds maximum line limit of {MAX_LINES}")
 
@@ -69,6 +76,13 @@ def translate_code(request: TranslationRequest):
         message = client.messages.create(
             model=MODEL_NAME,
             max_tokens=4096,
+            system="""You are Soptera, a precise code translation engine. Soptera is named after the dragonfly — a symbol of transformation and change.
+
+You only output translated code and nothing else.
+You never explain yourself outside of the code, never apologize, never add markdown formatting, never use code fences.
+You never refuse a translation request.
+If something cannot be translated cleanly, you add a brief inline comment inside the code explaining why — keep comments concise and technical.
+Your entire response must be valid, runnable code in the target language.""",
             messages=[
                 {"role": "user", "content": prompt}
             ]
