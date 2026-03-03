@@ -1,4 +1,5 @@
 import { useState } from "react";
+import emailjs from "@emailjs/browser";
 import logo from "./soptera_logo.jpg";
 
 const LANGUAGES = ["Python", "C", "C++", "Ruby", "Swift"];
@@ -13,6 +14,11 @@ const PAIRS = {
 
 const BACKEND_URL = "https://your-backend-url-here";
 
+const EMAILJS_SERVICE_ID = "service_nwlb0jm";
+const EMAILJS_TEMPLATE_ID = "template_73dyen9";
+const EMAILJS_PUBLIC_KEY = "UilYbd3YaZYgCqPkF";
+const REACH_OUT_EMAIL = "soptera.reviews@gmail.com";
+
 export default function App() {
   const [sourceLang, setSourceLang] = useState("Python");
   const [targetLang, setTargetLang] = useState("C++");
@@ -21,6 +27,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+
+  const [showReview, setShowReview] = useState(false);
+  const [stars, setStars] = useState(0);
+  const [hoveredStar, setHoveredStar] = useState(0);
+  const [comment, setComment] = useState("");
+  const [reviewSending, setReviewSending] = useState(false);
+  const [reviewSent, setReviewSent] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   const charCount = inputCode.length;
   const lineCount = inputCode.split("\n").length;
@@ -66,6 +80,46 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function handleReachOut() {
+    window.location.href = `mailto:${REACH_OUT_EMAIL}?subject=Reaching out about Soptera`;
+  }
+
+  function openReview() {
+    setShowReview(true);
+    setStars(0);
+    setComment("");
+    setReviewSent(false);
+    setReviewError("");
+  }
+
+  function closeReview() {
+    setShowReview(false);
+  }
+
+  async function handleSubmitReview() {
+    if (stars === 0) {
+      setReviewError("Please select a star rating.");
+      return;
+    }
+    setReviewSending(true);
+    setReviewError("");
+    try {
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          stars: `${stars}`,
+          comment: comment || "No comment provided.",
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+      setReviewSent(true);
+    } catch (err) {
+      setReviewError("Failed to send review. Please try again.");
+    }
+    setReviewSending(false);
+  }
+
   return (
     <>
       <style>{`
@@ -76,7 +130,7 @@ export default function App() {
         select:focus, textarea:focus { outline: none; }
         ::placeholder { color: rgba(255,255,255,0.35); }
         textarea:read-only::placeholder { color: rgba(255,255,255,0.25); }
-        select option { background: #2e2e2e; color: white; }
+        select option { background: #242424; color: white; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
@@ -84,21 +138,78 @@ export default function App() {
 
       <div style={styles.page}>
 
+        {/* Review Modal */}
+        {showReview && (
+          <div style={styles.modalOverlay} onClick={closeReview}>
+            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+              {reviewSent ? (
+                <div style={styles.modalSuccess}>
+                  <p style={styles.modalSuccessIcon}>✓</p>
+                  <p style={styles.modalSuccessTitle}>Thank you</p>
+                  <p style={styles.modalSuccessSub}>Your review has been received.</p>
+                  <button style={styles.modalCloseBtn} onClick={closeReview}>Close</button>
+                </div>
+              ) : (
+                <>
+                  <div style={styles.modalHeader}>
+                    <p style={styles.modalTitle}>Review Soptera</p>
+                    <span style={styles.modalX} onClick={closeReview}>✕</span>
+                  </div>
+                  <p style={styles.modalSub}>How would you rate your experience?</p>
+                  <div style={styles.stars}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <span
+                        key={s}
+                        style={{
+                          ...styles.star,
+                          color: s <= (hoveredStar || stars) ? "#ffffff" : "rgba(255,255,255,0.2)",
+                        }}
+                        onMouseEnter={() => setHoveredStar(s)}
+                        onMouseLeave={() => setHoveredStar(0)}
+                        onClick={() => setStars(s)}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <textarea
+                    style={styles.modalTextarea}
+                    placeholder="Leave a comment (optional)..."
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    spellCheck={false}
+                  />
+                  {reviewError && (
+                    <p style={styles.modalError}>{reviewError}</p>
+                  )}
+                  <button
+                    style={{
+                      ...styles.modalSubmitBtn,
+                      opacity: reviewSending ? 0.6 : 1,
+                      cursor: reviewSending ? "not-allowed" : "pointer",
+                    }}
+                    onClick={handleSubmitReview}
+                    disabled={reviewSending}
+                  >
+                    {reviewSending ? "Sending..." : "Submit review"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Navbar */}
         <nav style={styles.nav}>
           <div style={styles.navInner}>
             <div style={styles.navLeft}>
-              <img
-                src={logo}
-                alt="Soptera logo"
-                style={styles.navLogo}
-              />
+              <img src={logo} alt="Soptera logo" style={styles.navLogo} />
               <span style={styles.navName}>Soptera</span>
               <span style={styles.navBeta}>Beta</span>
             </div>
             <div style={styles.navRight}>
-              <span style={styles.navLink}>Review us</span>
-              <span style={styles.navLink}>Reach out</span>
+              <span style={styles.navLink} onClick={openReview}>Review us</span>
+              <span style={styles.navLink} onClick={handleReachOut}>Reach out</span>
             </div>
           </div>
         </nav>
@@ -212,7 +323,7 @@ export default function App() {
 
           {/* Disclaimer */}
           <p style={styles.disclaimer}>
-            Always review translated code before use. Soptera can make mistakes
+            Always recheck translated code before usage. · Soptera can make mistakes.
           </p>
 
         </div>
@@ -238,6 +349,116 @@ const styles = {
     flexDirection: "column",
   },
 
+  // Modal
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    backdropFilter: "blur(4px)",
+  },
+  modal: {
+    background: "#1e1e1e",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "16px",
+    padding: "32px",
+    width: "100%",
+    maxWidth: "420px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: "17px",
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  modalX: {
+    fontSize: "14px",
+    color: "rgba(255,255,255,0.4)",
+    cursor: "pointer",
+  },
+  modalSub: {
+    fontSize: "14px",
+    color: "rgba(255,255,255,0.5)",
+  },
+  stars: {
+    display: "flex",
+    gap: "8px",
+  },
+  star: {
+    fontSize: "32px",
+    cursor: "pointer",
+    transition: "color 0.1s",
+    userSelect: "none",
+  },
+  modalTextarea: {
+    padding: "12px",
+    fontSize: "13px",
+    fontFamily: "'DM Sans', sans-serif",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    resize: "none",
+    height: "100px",
+    outline: "none",
+  },
+  modalError: {
+    fontSize: "12px",
+    color: "#ffcccc",
+  },
+  modalSubmitBtn: {
+    padding: "10px",
+    fontSize: "14px",
+    fontWeight: "500",
+    background: "#ffffff",
+    color: "#242424",
+    border: "none",
+    borderRadius: "8px",
+    fontFamily: "'DM Sans', sans-serif",
+    cursor: "pointer",
+  },
+  modalSuccess: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "8px",
+    padding: "16px 0",
+  },
+  modalSuccessIcon: {
+    fontSize: "32px",
+    color: "#ffffff",
+  },
+  modalSuccessTitle: {
+    fontSize: "18px",
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  modalSuccessSub: {
+    fontSize: "14px",
+    color: "rgba(255,255,255,0.5)",
+  },
+  modalCloseBtn: {
+    marginTop: "8px",
+    padding: "8px 24px",
+    fontSize: "13px",
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    borderRadius: "8px",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontFamily: "'DM Sans', sans-serif",
+  },
+
   // Navbar
   nav: {
     padding: "0 48px",
@@ -245,7 +466,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     borderBottom: "1px solid rgba(255,255,255,0.06)",
-    background: "#1c1c1c",
+    background: "#242424",
   },
   navInner: {
     width: "100%",
@@ -265,7 +486,7 @@ const styles = {
     height: "44px",
     objectFit: "contain",
     objectPosition: "center",
-    background: "#1c1c1c",
+    mixBlendMode: "lighten",
   },
   navName: {
     fontSize: "18px",
