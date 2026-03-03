@@ -12,7 +12,7 @@ const PAIRS = {
   "Swift":  ["C++", "Ruby"],
 };
 
-const BACKEND_URL = "https://your-backend-url-here";
+const BACKEND_URL = "https://soptera-backend.onrender.com";
 
 const EMAILJS_SERVICE_ID = "service_nwlb0jm";
 const EMAILJS_TEMPLATE_ID = "template_73dyen9";
