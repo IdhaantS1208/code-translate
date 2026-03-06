@@ -1,8 +1,31 @@
 import { useState, useEffect, useRef } from "react";
 import emailjs from "@emailjs/browser";
+import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import js from "react-syntax-highlighter/dist/esm/languages/hljs/javascript";
+import python from "react-syntax-highlighter/dist/esm/languages/hljs/python";
+import cpp from "react-syntax-highlighter/dist/esm/languages/hljs/cpp";
+import ruby from "react-syntax-highlighter/dist/esm/languages/hljs/ruby";
+import swift from "react-syntax-highlighter/dist/esm/languages/hljs/swift";
 import logo from "./soptera_logo.jpg";
+import thinkingActive from "./thinking_active.png";
+import thinkingInactive from "./thinking_inactive.png";
+
+SyntaxHighlighter.registerLanguage("javascript", js);
+SyntaxHighlighter.registerLanguage("python", python);
+SyntaxHighlighter.registerLanguage("cpp", cpp);
+SyntaxHighlighter.registerLanguage("ruby", ruby);
+SyntaxHighlighter.registerLanguage("swift", swift);
 
 const LANGUAGES = ["Python", "C", "C++", "Ruby", "Swift"];
+
+const LANG_MAP = {
+  "Python": "python",
+  "C": "cpp",
+  "C++": "cpp",
+  "Ruby": "ruby",
+  "Swift": "swift",
+};
 
 const PAIRS = {
   "Python": ["C++", "Ruby", "Swift"],
@@ -18,8 +41,6 @@ const EMAILJS_SERVICE_ID = "service_nwlb0jm";
 const EMAILJS_TEMPLATE_ID = "template_73dyen9";
 const EMAILJS_PUBLIC_KEY = "UilYbd3YaZYgCqPkF";
 const REACH_OUT_EMAIL = "soptera.reviews@gmail.com";
-
-const THINKING_FILLER = "Analysing translation decisions...";
 
 function useTypewriter(text, speed = 30) {
   const [displayed, setDisplayed] = useState("");
@@ -62,6 +83,7 @@ export default function App() {
   const [thinking, setThinking] = useState("");
   const [thinkingMode, setThinkingMode] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [thinkingLoading, setThinkingLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -78,8 +100,7 @@ export default function App() {
   const isOverLimit = charCount > 12000 || lineCount > 300;
   const isDisabled = loading || !inputCode.trim() || isOverLimit;
 
-  const displayedCode = useTypewriter(outputCode, 25);
-  const displayedThinking = useTypewriter(thinking, 40);
+  const displayedThinking = useTypewriter(thinking, 35);
 
   function handleSourceChange(e) {
     const newSource = e.target.value;
@@ -93,6 +114,7 @@ export default function App() {
     setError("");
     setOutputCode("");
     setThinking("");
+
     try {
       const response = await fetch(`${BACKEND_URL}/translate`, {
         method: "POST",
@@ -101,22 +123,45 @@ export default function App() {
           source_lang: sourceLang,
           target_lang: targetLang,
           code: inputCode,
-          thinking_mode: thinkingMode,
         }),
       });
       const data = await response.json();
       if (!response.ok) {
         setError(data.detail || "Translation failed.");
-      } else {
-        setOutputCode(data.translated_code);
-        if (thinkingMode && data.thinking) {
-          setThinking(data.thinking);
-        }
+        setLoading(false);
+        return;
       }
+      setOutputCode(data.translated_code);
+      setLoading(false);
+
+      if (thinkingMode) {
+        setThinkingLoading(true);
+        await new Promise((res) => setTimeout(res, 1500));
+        try {
+          const thinkRes = await fetch(`${BACKEND_URL}/think`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              source_lang: sourceLang,
+              target_lang: targetLang,
+              source_code: inputCode,
+              translated_code: data.translated_code,
+            }),
+          });
+          const thinkData = await thinkRes.json();
+          if (thinkRes.ok) {
+            setThinking(thinkData.thinking);
+          }
+        } catch (e) {
+          setThinking("Thinking mode unavailable.");
+        }
+        setThinkingLoading(false);
+      }
+
     } catch (err) {
       setError("Could not reach the server. Please try again.");
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   function handleCopy() {
@@ -152,10 +197,7 @@ export default function App() {
       await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
-        {
-          stars: `${stars}`,
-          comment: comment || "No comment provided.",
-        },
+        { stars: `${stars}`, comment: comment || "No comment provided." },
         EMAILJS_PUBLIC_KEY
       );
       setReviewSent(true);
@@ -163,6 +205,10 @@ export default function App() {
       setReviewError("Failed to send review. Please try again.");
     }
     setReviewSending(false);
+  }
+
+  function parseBullets(text) {
+    return text.split("•").filter((b) => b.trim().length > 0).map((b) => b.trim());
   }
 
   return (
@@ -173,9 +219,9 @@ export default function App() {
         body { background: #242424; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         select:focus, textarea:focus { outline: none; }
         ::placeholder { color: rgba(255,255,255,0.35); }
-        textarea:read-only::placeholder { color: rgba(255,255,255,0.25); }
         select option { background: #2e2e2e; color: white; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -213,9 +259,7 @@ export default function App() {
                         onMouseEnter={() => setHoveredStar(s)}
                         onMouseLeave={() => setHoveredStar(0)}
                         onClick={() => setStars(s)}
-                      >
-                        ★
-                      </span>
+                      >★</span>
                     ))}
                   </div>
                   <textarea
@@ -274,27 +318,28 @@ export default function App() {
           {/* Toolbar */}
           <div style={styles.toolbar}>
 
-            {/* Thinking toggle */}
             <button
               style={{
                 ...styles.thinkingBtn,
-                background: thinkingMode ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
-                border: thinkingMode ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(255,255,255,0.12)",
-                color: thinkingMode ? "#ffffff" : "rgba(255,255,255,0.45)",
+                border: thinkingMode
+                  ? "1px solid rgba(255,255,255,0.5)"
+                  : "1px solid rgba(255,255,255,0.15)",
+                color: thinkingMode ? "#ffffff" : "rgba(255,255,255,0.35)",
+                background: "transparent",
               }}
               onClick={() => setThinkingMode(!thinkingMode)}
             >
-              <span style={styles.thinkingIcon}>💡</span>
+              <img
+                src={thinkingMode ? thinkingActive : thinkingInactive}
+                alt="thinking"
+                style={styles.thinkingIcon}
+              />
               Thinking
             </button>
 
             <div style={styles.selectorGroup}>
               <label style={styles.label}>From</label>
-              <select
-                style={styles.select}
-                value={sourceLang}
-                onChange={handleSourceChange}
-              >
+              <select style={styles.select} value={sourceLang} onChange={handleSourceChange}>
                 {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
               </select>
             </div>
@@ -320,11 +365,7 @@ export default function App() {
 
             <div style={styles.selectorGroup}>
               <label style={styles.label}>To</label>
-              <select
-                style={styles.select}
-                value={targetLang}
-                onChange={(e) => setTargetLang(e.target.value)}
-              >
+              <select style={styles.select} value={targetLang} onChange={(e) => setTargetLang(e.target.value)}>
                 {PAIRS[sourceLang].map((l) => <option key={l}>{l}</option>)}
               </select>
             </div>
@@ -348,13 +389,23 @@ export default function App() {
                   {lineCount} lines · {charCount} / 12,000
                 </span>
               </div>
-              <textarea
-                style={styles.textarea}
-                placeholder={`Paste your ${sourceLang} code here...`}
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value)}
-                spellCheck={false}
-              />
+              <div style={styles.codeWrapper}>
+                <SyntaxHighlighter
+                  language={LANG_MAP[sourceLang]}
+                  style={atomOneDark}
+                  customStyle={styles.syntaxHighlighter}
+                  wrapLongLines={false}
+                >
+                  {inputCode || " "}
+                </SyntaxHighlighter>
+                <textarea
+                  style={styles.codeOverlay}
+                  value={inputCode}
+                  onChange={(e) => setInputCode(e.target.value)}
+                  spellCheck={false}
+                  placeholder={`Paste your ${sourceLang} code here...`}
+                />
+              </div>
             </div>
 
             {/* Divider */}
@@ -370,13 +421,16 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <textarea
-                style={{ ...styles.textarea, opacity: displayedCode ? 1 : 0.6 }}
-                placeholder="Translated code will appear here..."
-                value={displayedCode}
-                readOnly
-                spellCheck={false}
-              />
+              <div style={styles.codeWrapper}>
+                <SyntaxHighlighter
+                  language={LANG_MAP[targetLang]}
+                  style={atomOneDark}
+                  customStyle={styles.syntaxHighlighter}
+                  wrapLongLines={false}
+                >
+                  {outputCode || " "}
+                </SyntaxHighlighter>
+              </div>
             </div>
 
             {/* Thinking panel */}
@@ -385,13 +439,27 @@ export default function App() {
                 <div style={styles.divider} />
                 <div style={{ ...styles.panelWrapper, animation: "slideIn 0.3s ease" }}>
                   <div style={styles.panelHeader}>
-                    <span style={styles.panelLang}>💡 Thinking</span>
+                    <span style={styles.panelLang}>
+                      <img
+                        src={thinkingActive}
+                        alt=""
+                        style={{ width: 18, height: 18, marginRight: 6, verticalAlign: "middle", mixBlendMode: "lighten" }}
+                      />
+                      Thinking
+                    </span>
                   </div>
                   <div style={styles.thinkingPanel}>
-                    {loading ? (
-                      <p style={styles.thinkingFiller}>{THINKING_FILLER}</p>
+                    {thinkingLoading ? (
+                      <p style={styles.thinkingFiller}>Analysing translation decisions...</p>
                     ) : thinking ? (
-                      <p style={styles.thinkingText}>{displayedThinking}</p>
+                      <div style={{ animation: "fadeIn 0.4s ease" }}>
+                        {parseBullets(displayedThinking).map((bullet, i) => (
+                          <div key={i} style={styles.bulletRow}>
+                            <span style={styles.bulletDot}>•</span>
+                            <p style={styles.bulletText}>{bullet}</p>
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <p style={styles.thinkingFiller}>Translate with thinking mode on to see the reasoning behind the translation.</p>
                     )}
@@ -430,7 +498,6 @@ const styles = {
     flexDirection: "column",
   },
 
-  // Modal
   modalOverlay: {
     position: "fixed",
     inset: 0,
@@ -540,7 +607,6 @@ const styles = {
     fontFamily: "'DM Sans', sans-serif",
   },
 
-  // Navbar
   nav: {
     padding: "0 48px",
     height: "64px",
@@ -566,7 +632,6 @@ const styles = {
     width: "44px",
     height: "44px",
     objectFit: "contain",
-    objectPosition: "center",
     mixBlendMode: "lighten",
   },
   navName: {
@@ -595,7 +660,6 @@ const styles = {
     fontWeight: "400",
   },
 
-  // Hero
   hero: {
     textAlign: "center",
     padding: "64px 24px 44px",
@@ -625,7 +689,6 @@ const styles = {
     fontWeight: "300",
   },
 
-  // Card
   card: {
     maxWidth: "1160px",
     margin: "0 auto 40px",
@@ -636,7 +699,6 @@ const styles = {
     padding: "28px",
   },
 
-  // Toolbar
   toolbar: {
     display: "flex",
     alignItems: "flex-end",
@@ -647,7 +709,7 @@ const styles = {
   thinkingBtn: {
     display: "flex",
     alignItems: "center",
-    gap: "6px",
+    gap: "7px",
     padding: "0 14px",
     height: "38px",
     borderRadius: "20px",
@@ -658,7 +720,10 @@ const styles = {
     transition: "all 0.2s",
   },
   thinkingIcon: {
-    fontSize: "14px",
+    width: "22px",
+    height: "22px",
+    objectFit: "contain",
+    mixBlendMode: "lighten",
   },
   selectorGroup: {
     display: "flex",
@@ -720,7 +785,6 @@ const styles = {
     animation: "spin 0.8s linear infinite",
   },
 
-  // Panels
   panels: {
     display: "flex",
     gap: "0",
@@ -742,6 +806,8 @@ const styles = {
     fontSize: "13px",
     fontWeight: "500",
     color: "rgba(255,255,255,0.5)",
+    display: "flex",
+    alignItems: "center",
   },
   divider: {
     width: "1px",
@@ -749,18 +815,43 @@ const styles = {
     margin: "0 20px",
     flexShrink: 0,
   },
-  textarea: {
+
+  codeWrapper: {
     flex: 1,
+    position: "relative",
+    borderRadius: "10px",
+    overflow: "auto",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  syntaxHighlighter: {
+    margin: 0,
+    padding: "16px",
+    height: "100%",
+    background: "rgba(255,255,255,0.05)",
+    fontSize: "13px",
+    fontFamily: "'DM Mono', 'Menlo', 'Monaco', monospace",
+    lineHeight: "1.65",
+    overflowX: "auto",
+    overflowY: "auto",
+  },
+  codeOverlay: {
+    position: "absolute",
+    inset: 0,
     padding: "16px",
     fontSize: "13px",
     fontFamily: "'DM Mono', 'Menlo', 'Monaco', monospace",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "10px",
-    resize: "none",
-    color: "#ffffff",
     lineHeight: "1.65",
-    background: "rgba(255,255,255,0.05)",
+    background: "transparent",
+    color: "transparent",
+    caretColor: "#ffffff",
+    border: "none",
+    resize: "none",
+    outline: "none",
+    zIndex: 2,
+    width: "100%",
+    height: "100%",
   },
+
   counter: {
     fontSize: "12px",
     transition: "color 0.2s",
@@ -792,7 +883,6 @@ const styles = {
     marginTop: "16px",
   },
 
-  // Thinking panel
   thinkingPanel: {
     flex: 1,
     padding: "16px",
@@ -801,9 +891,20 @@ const styles = {
     background: "rgba(255,255,255,0.03)",
     overflowY: "auto",
   },
-  thinkingText: {
+  bulletRow: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "14px",
+  },
+  bulletDot: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: "16px",
+    flexShrink: 0,
+    marginTop: "1px",
+  },
+  bulletText: {
     fontSize: "13px",
-    color: "rgba(255,255,255,0.75)",
+    color: "rgba(255,255,255,0.7)",
     lineHeight: "1.8",
     fontFamily: "'DM Sans', sans-serif",
     fontWeight: "300",
@@ -816,7 +917,6 @@ const styles = {
     fontStyle: "italic",
   },
 
-  // Footer
   footer: {
     marginTop: "auto",
     borderTop: "1px solid rgba(255,255,255,0.06)",

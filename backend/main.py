@@ -8,7 +8,6 @@ from prompts import get_translation_prompt, get_thinking_prompt
 
 app = FastAPI()
 
-# Allow frontend to talk to backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,23 +16,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# This defines what the frontend must send us
 class TranslationRequest(BaseModel):
     source_lang: str
     target_lang: str
     code: str
-    thinking_mode: bool = False
 
-# This defines what we send back to the frontend
+class ThinkingRequest(BaseModel):
+    source_lang: str
+    target_lang: str
+    source_code: str
+    translated_code: str
+
 class TranslationResponse(BaseModel):
     translated_code: str
     source_lang: str
     target_lang: str
-    thinking: str = ""
+
+class ThinkingResponse(BaseModel):
+    thinking: str
 
 @app.get("/")
 def root():
-    return {"status": "Code translator backend is running"}
+    return {"status": "Soptera backend is running"}
 
 @app.get("/languages")
 def get_languages():
@@ -46,7 +50,6 @@ def get_pairs():
 @app.post("/translate", response_model=TranslationResponse)
 def translate_code(request: TranslationRequest):
 
-    # Validate languages
     if request.source_lang not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported source language: {request.source_lang}")
 
@@ -59,20 +62,17 @@ def translate_code(request: TranslationRequest):
     if request.target_lang not in VALID_PAIRS.get(request.source_lang, []):
         raise HTTPException(status_code=400, detail=f"Translation from {request.source_lang} to {request.target_lang} is not supported")
 
-    # Validate input size
     if len(request.code) > MAX_CHARACTERS:
         raise HTTPException(status_code=400, detail=f"Code exceeds maximum character limit of {MAX_CHARACTERS}")
 
     if len(request.code.splitlines()) > MAX_LINES:
         raise HTTPException(status_code=400, detail=f"Code exceeds maximum line limit of {MAX_LINES}")
 
-    # Build the translation prompt
     try:
         prompt = get_translation_prompt(request.source_lang, request.target_lang, request.code)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Call the Anthropic API for translation
     try:
         client = anthropic.Anthropic(api_key=API_KEY)
         message = client.messages.create(
@@ -94,33 +94,34 @@ Your entire response must be valid, runnable code in the target language.""",
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
 
-    # If thinking mode is on, make a second call for the explanation
-    thinking = ""
-    if request.thinking_mode:
-        print(f"Thinking mode is ON — generating explanation")
-        try:
-            thinking_prompt = get_thinking_prompt(
-                request.source_lang,
-                request.target_lang,
-                request.code,
-                translated_code
-            )
-            thinking_message = client.messages.create(
-                model=MODEL_NAME,
-                max_tokens=4096,
-                system="""You are Soptera's translation analyst. You produce deep, specific, technical explanations of code translation decisions for intermediate developers. You write in clear flowing prose with no markdown, no bullet points, no headers. Every observation you make is specific to the actual code provided — you never make generic statements.""",
-                messages=[
-                    {"role": "user", "content": thinking_prompt}
-                ]
-            )
-            thinking = thinking_message.content[0].text
-
-        except Exception as e:
-            thinking = f"Thinking mode unavailable: {str(e)}"
-
     return TranslationResponse(
         translated_code=translated_code,
         source_lang=request.source_lang,
         target_lang=request.target_lang,
-        thinking=thinking
     )
+
+@app.post("/think", response_model=ThinkingResponse)
+def think(request: ThinkingRequest):
+
+    try:
+        thinking_prompt = get_thinking_prompt(
+            request.source_lang,
+            request.target_lang,
+            request.source_code,
+            request.translated_code,
+        )
+        client = anthropic.Anthropic(api_key=API_KEY)
+        message = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=4096,
+            system="""You are Soptera's internal translation engine reflecting on your own decisions. You write in first person, present tense, as a series of bullet points. Each bullet is a direct internal thought about a specific translation decision. You are technical, specific, and never generic. You never use markdown beyond the bullet character •.""",
+            messages=[
+                {"role": "user", "content": thinking_prompt}
+            ]
+        )
+        thinking = message.content[0].text
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Thinking failed: {str(e)}")
+
+    return ThinkingResponse(thinking=thinking)
