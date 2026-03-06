@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import emailjs from "@emailjs/browser";
 import logo from "./soptera_logo.jpg";
 
@@ -19,11 +19,48 @@ const EMAILJS_TEMPLATE_ID = "template_73dyen9";
 const EMAILJS_PUBLIC_KEY = "UilYbd3YaZYgCqPkF";
 const REACH_OUT_EMAIL = "soptera.reviews@gmail.com";
 
+const THINKING_FILLER = "Analysing translation decisions...";
+
+function useTypewriter(text, speed = 30) {
+  const [displayed, setDisplayed] = useState("");
+  const indexRef = useRef(0);
+  const wordsRef = useRef([]);
+
+  useEffect(() => {
+    if (!text) {
+      setDisplayed("");
+      indexRef.current = 0;
+      wordsRef.current = [];
+      return;
+    }
+    wordsRef.current = text.split(" ");
+    indexRef.current = 0;
+    setDisplayed("");
+
+    const interval = setInterval(() => {
+      if (indexRef.current < wordsRef.current.length) {
+        setDisplayed((prev) =>
+          prev ? prev + " " + wordsRef.current[indexRef.current] : wordsRef.current[indexRef.current]
+        );
+        indexRef.current += 1;
+      } else {
+        clearInterval(interval);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed]);
+
+  return displayed;
+}
+
 export default function App() {
   const [sourceLang, setSourceLang] = useState("Python");
   const [targetLang, setTargetLang] = useState("C++");
   const [inputCode, setInputCode] = useState("");
   const [outputCode, setOutputCode] = useState("");
+  const [thinking, setThinking] = useState("");
+  const [thinkingMode, setThinkingMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -41,6 +78,9 @@ export default function App() {
   const isOverLimit = charCount > 12000 || lineCount > 300;
   const isDisabled = loading || !inputCode.trim() || isOverLimit;
 
+  const displayedCode = useTypewriter(outputCode, 25);
+  const displayedThinking = useTypewriter(thinking, 40);
+
   function handleSourceChange(e) {
     const newSource = e.target.value;
     setSourceLang(newSource);
@@ -52,6 +92,7 @@ export default function App() {
     setLoading(true);
     setError("");
     setOutputCode("");
+    setThinking("");
     try {
       const response = await fetch(`${BACKEND_URL}/translate`, {
         method: "POST",
@@ -60,6 +101,7 @@ export default function App() {
           source_lang: sourceLang,
           target_lang: targetLang,
           code: inputCode,
+          thinking_mode: thinkingMode,
         }),
       });
       const data = await response.json();
@@ -67,6 +109,9 @@ export default function App() {
         setError(data.detail || "Translation failed.");
       } else {
         setOutputCode(data.translated_code);
+        if (thinkingMode && data.thinking) {
+          setThinking(data.thinking);
+        }
       }
     } catch (err) {
       setError("Could not reach the server. Please try again.");
@@ -127,10 +172,11 @@ export default function App() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #242424; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
         select:focus, textarea:focus { outline: none; }
         ::placeholder { color: rgba(255,255,255,0.35); }
         textarea:read-only::placeholder { color: rgba(255,255,255,0.25); }
-        select option { background: #242424; color: white; }
+        select option { background: #2e2e2e; color: white; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
@@ -179,9 +225,7 @@ export default function App() {
                     onChange={(e) => setComment(e.target.value)}
                     spellCheck={false}
                   />
-                  {reviewError && (
-                    <p style={styles.modalError}>{reviewError}</p>
-                  )}
+                  {reviewError && <p style={styles.modalError}>{reviewError}</p>}
                   <button
                     style={{
                       ...styles.modalSubmitBtn,
@@ -229,6 +273,21 @@ export default function App() {
 
           {/* Toolbar */}
           <div style={styles.toolbar}>
+
+            {/* Thinking toggle */}
+            <button
+              style={{
+                ...styles.thinkingBtn,
+                background: thinkingMode ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                border: thinkingMode ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(255,255,255,0.12)",
+                color: thinkingMode ? "#ffffff" : "rgba(255,255,255,0.45)",
+              }}
+              onClick={() => setThinkingMode(!thinkingMode)}
+            >
+              <span style={styles.thinkingIcon}>💡</span>
+              Thinking
+            </button>
+
             <div style={styles.selectorGroup}>
               <label style={styles.label}>From</label>
               <select
@@ -269,6 +328,7 @@ export default function App() {
                 {PAIRS[sourceLang].map((l) => <option key={l}>{l}</option>)}
               </select>
             </div>
+
           </div>
 
           {/* Error */}
@@ -311,13 +371,34 @@ export default function App() {
                 )}
               </div>
               <textarea
-                style={{ ...styles.textarea, opacity: outputCode ? 1 : 0.6 }}
+                style={{ ...styles.textarea, opacity: displayedCode ? 1 : 0.6 }}
                 placeholder="Translated code will appear here..."
-                value={outputCode}
+                value={displayedCode}
                 readOnly
                 spellCheck={false}
               />
             </div>
+
+            {/* Thinking panel */}
+            {thinkingMode && (
+              <>
+                <div style={styles.divider} />
+                <div style={{ ...styles.panelWrapper, animation: "slideIn 0.3s ease" }}>
+                  <div style={styles.panelHeader}>
+                    <span style={styles.panelLang}>💡 Thinking</span>
+                  </div>
+                  <div style={styles.thinkingPanel}>
+                    {loading ? (
+                      <p style={styles.thinkingFiller}>{THINKING_FILLER}</p>
+                    ) : thinking ? (
+                      <p style={styles.thinkingText}>{displayedThinking}</p>
+                    ) : (
+                      <p style={styles.thinkingFiller}>Translate with thinking mode on to see the reasoning behind the translation.</p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
 
           </div>
 
@@ -563,6 +644,22 @@ const styles = {
     gap: "20px",
     marginBottom: "22px",
   },
+  thinkingBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "0 14px",
+    height: "38px",
+    borderRadius: "20px",
+    fontSize: "13px",
+    fontWeight: "500",
+    cursor: "pointer",
+    fontFamily: "'DM Sans', sans-serif",
+    transition: "all 0.2s",
+  },
+  thinkingIcon: {
+    fontSize: "14px",
+  },
   selectorGroup: {
     display: "flex",
     flexDirection: "column",
@@ -634,6 +731,7 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "10px",
+    minWidth: 0,
   },
   panelHeader: {
     display: "flex",
@@ -692,6 +790,30 @@ const styles = {
     color: "rgba(255,255,255,0.2)",
     textAlign: "center",
     marginTop: "16px",
+  },
+
+  // Thinking panel
+  thinkingPanel: {
+    flex: 1,
+    padding: "16px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.03)",
+    overflowY: "auto",
+  },
+  thinkingText: {
+    fontSize: "13px",
+    color: "rgba(255,255,255,0.75)",
+    lineHeight: "1.8",
+    fontFamily: "'DM Sans', sans-serif",
+    fontWeight: "300",
+  },
+  thinkingFiller: {
+    fontSize: "13px",
+    color: "rgba(255,255,255,0.25)",
+    lineHeight: "1.8",
+    fontFamily: "'DM Sans', sans-serif",
+    fontStyle: "italic",
   },
 
   // Footer

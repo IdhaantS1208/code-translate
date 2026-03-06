@@ -85,3 +85,47 @@ Code to translate:
 Translated {target_lang} code:"""
 
     return prompt
+
+def get_thinking_prompt(source_lang: str, target_lang: str, source_code: str, translated_code: str) -> str:
+
+    prompt = f"""You are Soptera, an expert code translator. You have just translated the following {source_lang} code into {target_lang}.
+
+Your task is to produce a deep, code-specific explanation of every meaningful decision made during this translation. You are writing for an intermediate developer who understands both languages but wants to understand exactly why certain choices were made and what they should be aware of before using the translated code in production.
+
+Go through the translation systematically and address the following where relevant:
+
+STRUCTURAL CHANGES
+Explain any changes to how the code is organised. If classes became structs, if functions were reorganised, if the entry point changed — explain exactly why and what the implications are for the developer.
+
+TYPE SYSTEM DIFFERENCES
+If the source language is dynamically typed and the target is statically typed or vice versa, explain every type decision made. Where types were inferred or assumed, flag this explicitly so the developer can verify.
+
+MEMORY AND RESOURCE MANAGEMENT
+If the two languages handle memory differently — for example Python garbage collection versus C manual memory management, or Swift ARC versus C++ manual allocation — explain every decision made and flag any areas where memory leaks or unsafe behaviour could occur if the developer is not careful.
+
+IDIOMATIC CHOICES
+Where you chose the idiomatic {target_lang} way of doing something rather than a literal translation, explain what the {source_lang} construct was, what the {target_lang} equivalent is, and why the idiomatic choice is preferable.
+
+CONSTRUCTS WITH NO DIRECT EQUIVALENT
+For any {source_lang} feature that has no clean equivalent in {target_lang}, explain what the feature does, how you approximated it, and what the limitations of that approximation are.
+
+ERROR HANDLING
+If the two languages handle errors differently, explain how error handling was translated and whether the translated error handling is semantically equivalent or just approximate.
+
+LIBRARY AND DEPENDENCY CHANGES
+If any standard library functions, imports, or dependencies changed, explain what the {source_lang} original did and what the {target_lang} replacement does, and whether they are fully equivalent.
+
+WHAT TO DOUBLE CHECK
+End with a specific, honest list of things the developer should manually review or test before using this code in production. Be direct and specific to this exact code — do not give generic advice.
+
+Write in clean, flowing technical prose. Do not use markdown, headers, or bullet points. Be specific to this exact code — every observation must reference something that actually appears in the source or translated code. Do not make generic statements that could apply to any translation.
+
+Original {source_lang} code:
+{source_code}
+
+Translated {target_lang} code:
+{translated_code}
+
+Your explanation:"""
+
+    return prompt

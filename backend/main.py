@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import anthropic
 
 from config import API_KEY, MODEL_NAME, MAX_CHARACTERS, MAX_LINES, SUPPORTED_LANGUAGES, VALID_PAIRS
-from prompts import get_translation_prompt
+from prompts import get_translation_prompt, get_thinking_prompt
 
 app = FastAPI()
 
@@ -22,12 +22,14 @@ class TranslationRequest(BaseModel):
     source_lang: str
     target_lang: str
     code: str
+    thinking_mode: bool = False
 
 # This defines what we send back to the frontend
 class TranslationResponse(BaseModel):
     translated_code: str
     source_lang: str
     target_lang: str
+    thinking: str = ""
 
 @app.get("/")
 def root():
@@ -64,13 +66,13 @@ def translate_code(request: TranslationRequest):
     if len(request.code.splitlines()) > MAX_LINES:
         raise HTTPException(status_code=400, detail=f"Code exceeds maximum line limit of {MAX_LINES}")
 
-    # Build the prompt
+    # Build the translation prompt
     try:
         prompt = get_translation_prompt(request.source_lang, request.target_lang, request.code)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Call the Anthropic API
+    # Call the Anthropic API for translation
     try:
         client = anthropic.Anthropic(api_key=API_KEY)
         message = client.messages.create(
@@ -92,8 +94,33 @@ Your entire response must be valid, runnable code in the target language.""",
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
 
+    # If thinking mode is on, make a second call for the explanation
+    thinking = ""
+    if request.thinking_mode:
+        print(f"Thinking mode is ON — generating explanation")
+        try:
+            thinking_prompt = get_thinking_prompt(
+                request.source_lang,
+                request.target_lang,
+                request.code,
+                translated_code
+            )
+            thinking_message = client.messages.create(
+                model=MODEL_NAME,
+                max_tokens=4096,
+                system="""You are Soptera's translation analyst. You produce deep, specific, technical explanations of code translation decisions for intermediate developers. You write in clear flowing prose with no markdown, no bullet points, no headers. Every observation you make is specific to the actual code provided — you never make generic statements.""",
+                messages=[
+                    {"role": "user", "content": thinking_prompt}
+                ]
+            )
+            thinking = thinking_message.content[0].text
+
+        except Exception as e:
+            thinking = f"Thinking mode unavailable: {str(e)}"
+
     return TranslationResponse(
         translated_code=translated_code,
         source_lang=request.source_lang,
-        target_lang=request.target_lang
+        target_lang=request.target_lang,
+        thinking=thinking
     )
