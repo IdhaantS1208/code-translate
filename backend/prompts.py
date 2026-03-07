@@ -100,7 +100,7 @@ Each bullet point must:
 - When referencing any specific code keyword, function name, variable, operator, or syntax element, always wrap it in backticks like `print()` or `std::cout`. Never use single quotes or any other wrapper for code references.
 
 Rules:
-- Write 5 to 7 bullet points total
+- Write 1 to 7 bullet points total
 - No headers, no blank lines between bullets, no markdown formatting beyond the • character
 - Do not use filler phrases like "it is worth noting" or "it is important to understand"
 - Be direct, technical, and specific to this exact code

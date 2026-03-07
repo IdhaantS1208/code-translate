@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import anthropic
 
@@ -27,14 +28,6 @@ class ThinkingRequest(BaseModel):
     source_code: str
     translated_code: str
 
-class TranslationResponse(BaseModel):
-    translated_code: str
-    source_lang: str
-    target_lang: str
-
-class ThinkingResponse(BaseModel):
-    thinking: str
-
 @app.get("/")
 def root():
     return {"status": "Soptera backend is running"}
@@ -47,7 +40,7 @@ def get_languages():
 def get_pairs():
     return {"pairs": VALID_PAIRS}
 
-@app.post("/translate", response_model=TranslationResponse)
+@app.post("/translate")
 def translate_code(request: TranslationRequest):
 
     if request.source_lang not in SUPPORTED_LANGUAGES:
@@ -73,34 +66,29 @@ def translate_code(request: TranslationRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    try:
-        client = anthropic.Anthropic(api_key=API_KEY)
-        message = client.messages.create(
-            model=MODEL_NAME,
-            max_tokens=4096,
-            system="""You are Soptera, a precise code translation engine. Soptera is named after the dragonfly — a symbol of transformation and change.
+    def stream():
+        try:
+            client = anthropic.Anthropic(api_key=API_KEY)
+            with client.messages.stream(
+                model=MODEL_NAME,
+                max_tokens=4096,
+                system="""You are Soptera, a precise code translation engine. Soptera is named after the dragonfly — a symbol of transformation and change.
 
 You only output translated code and nothing else.
 You never explain yourself outside of the code, never apologize, never add markdown formatting, never use code fences.
 You never refuse a translation request.
 If something cannot be translated cleanly, you add a brief inline comment inside the code explaining why — keep comments concise and technical.
 Your entire response must be valid, runnable code in the target language.""",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        translated_code = message.content[0].text
+                messages=[{"role": "user", "content": prompt}]
+            ) as stream:
+                for text in stream.text_stream:
+                    yield text
+        except Exception as e:
+            yield f"ERROR:{str(e)}"
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
+    return StreamingResponse(stream(), media_type="text/plain")
 
-    return TranslationResponse(
-        translated_code=translated_code,
-        source_lang=request.source_lang,
-        target_lang=request.target_lang,
-    )
-
-@app.post("/think", response_model=ThinkingResponse)
+@app.post("/think")
 def think(request: ThinkingRequest):
 
     try:
@@ -110,18 +98,21 @@ def think(request: ThinkingRequest):
             request.source_code,
             request.translated_code,
         )
-        client = anthropic.Anthropic(api_key=API_KEY)
-        message = client.messages.create(
-            model=MODEL_NAME,
-            max_tokens=4096,
-            system="""You are Soptera's internal translation engine reflecting on your own decisions. You write in first person, present tense, as a series of bullet points. Each bullet is a direct internal thought about a specific translation decision. You are technical, specific, and never generic. You never use markdown beyond the bullet character •.""",
-            messages=[
-                {"role": "user", "content": thinking_prompt}
-            ]
-        )
-        thinking = message.content[0].text
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Thinking failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-    return ThinkingResponse(thinking=thinking)
+    def stream():
+        try:
+            client = anthropic.Anthropic(api_key=API_KEY)
+            with client.messages.stream(
+                model=MODEL_NAME,
+                max_tokens=4096,
+                system="""You are Soptera's internal translation engine reflecting on your own decisions. You write in first person, present tense, as a series of bullet points. Each bullet is a direct internal thought about a specific translation decision. You are technical, specific, and never generic. You never use markdown beyond the bullet character •.""",
+                messages=[{"role": "user", "content": thinking_prompt}]
+            ) as stream:
+                for text in stream.text_stream:
+                    yield text
+        except Exception as e:
+            yield f"ERROR:{str(e)}"
+
+    return StreamingResponse(stream(), media_type="text/plain")

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import emailjs from "@emailjs/browser";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
@@ -42,39 +42,6 @@ const EMAILJS_TEMPLATE_ID = "template_73dyen9";
 const EMAILJS_PUBLIC_KEY = "UilYbd3YaZYgCqPkF";
 const REACH_OUT_EMAIL = "soptera.reviews@gmail.com";
 
-function useTypewriter(text, speed = 30) {
-  const [displayed, setDisplayed] = useState("");
-  const indexRef = useRef(0);
-  const wordsRef = useRef([]);
-
-  useEffect(() => {
-    if (!text) {
-      setDisplayed("");
-      indexRef.current = 0;
-      wordsRef.current = [];
-      return;
-    }
-    wordsRef.current = text.split(" ");
-    indexRef.current = 0;
-    setDisplayed("");
-
-    const interval = setInterval(() => {
-      if (indexRef.current < wordsRef.current.length) {
-        setDisplayed((prev) =>
-          prev ? prev + " " + wordsRef.current[indexRef.current] : wordsRef.current[indexRef.current]
-        );
-        indexRef.current += 1;
-      } else {
-        clearInterval(interval);
-      }
-    }, speed);
-
-    return () => clearInterval(interval);
-  }, [text, speed]);
-
-  return displayed;
-}
-
 export default function App() {
   const [sourceLang, setSourceLang] = useState("Python");
   const [targetLang, setTargetLang] = useState("C++");
@@ -100,8 +67,6 @@ export default function App() {
   const isOverLimit = charCount > 12000 || lineCount > 300;
   const isDisabled = loading || !inputCode.trim() || isOverLimit;
 
-  const displayedThinking = useTypewriter(thinking, 35);
-
   function handleSourceChange(e) {
     const newSource = e.target.value;
     setSourceLang(newSource);
@@ -125,18 +90,39 @@ export default function App() {
           code: inputCode,
         }),
       });
-      const data = await response.json();
+
       if (!response.ok) {
+        const data = await response.json();
         setError(data.detail || "Translation failed.");
         setLoading(false);
         return;
       }
-      setOutputCode(data.translated_code);
+
+      // Read translation stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullTranslation = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.startsWith("ERROR:")) {
+          setError(chunk.replace("ERROR:", ""));
+          setLoading(false);
+          return;
+        }
+        fullTranslation += chunk;
+        setOutputCode(fullTranslation);
+      }
+
       setLoading(false);
 
+      // If thinking mode is on, wait 1.5s then stream thinking
       if (thinkingMode) {
         setThinkingLoading(true);
         await new Promise((res) => setTimeout(res, 1500));
+
         try {
           const thinkRes = await fetch(`${BACKEND_URL}/think`, {
             method: "POST",
@@ -145,12 +131,24 @@ export default function App() {
               source_lang: sourceLang,
               target_lang: targetLang,
               source_code: inputCode,
-              translated_code: data.translated_code,
+              translated_code: fullTranslation,
             }),
           });
-          const thinkData = await thinkRes.json();
+
           if (thinkRes.ok) {
-            setThinking(thinkData.thinking);
+            const thinkReader = thinkRes.body.getReader();
+            const thinkDecoder = new TextDecoder();
+            let fullThinking = "";
+
+            setThinkingLoading(false);
+
+            while (true) {
+              const { done, value } = await thinkReader.read();
+              if (done) break;
+              const chunk = thinkDecoder.decode(value, { stream: true });
+              fullThinking += chunk;
+              setThinking(fullThinking);
+            }
           }
         } catch (e) {
           setThinking("Thinking mode unavailable.");
@@ -207,18 +205,18 @@ export default function App() {
     setReviewSending(false);
   }
 
- function parseBullets(text) {
+  function parseBullets(text) {
     return text.split("•").filter((b) => b.trim().length > 0).map((b) => b.trim());
-}
+  }
 
-function renderBulletText(text) {
+  function renderBulletText(text) {
     const parts = text.split(/(`.*?`)/g);
     return parts.map((part, i) =>
-        part.startsWith("`") && part.endsWith("`")
-            ? <span key={i} style={styles.bulletKeyword}>{part.slice(1, -1)}</span>
-            : part
+      part.startsWith("`") && part.endsWith("`")
+        ? <span key={i} style={styles.bulletKeyword}>{part.slice(1, -1)}</span>
+        : part
     );
-}
+  }
 
   return (
     <>
@@ -462,7 +460,7 @@ function renderBulletText(text) {
                       <p style={styles.thinkingFiller}>Analysing translation decisions...</p>
                     ) : thinking ? (
                       <div style={{ animation: "fadeIn 0.4s ease" }}>
-                        {parseBullets(displayedThinking).map((bullet, i) => (
+                        {parseBullets(thinking).map((bullet, i) => (
                           <div key={i} style={styles.bulletRow}>
                             <span style={styles.bulletDot}>•</span>
                             <p style={styles.bulletText}>{renderBulletText(bullet)}</p>
@@ -825,24 +823,24 @@ const styles = {
     flexShrink: 0,
   },
 
-codeWrapper: {
+  codeWrapper: {
     flex: 1,
     position: "relative",
     borderRadius: "10px",
     border: "1px solid rgba(255,255,255,0.1)",
     overflow: "hidden",
-},
-syntaxHighlighter: {
+  },
+  syntaxHighlighter: {
     margin: 0,
     padding: "16px",
-    minHeight: "100%",
     height: "100%",
+    minHeight: "100%",
     background: "rgba(255,255,255,0.05)",
     fontSize: "13px",
     fontFamily: "'DM Mono', 'Menlo', 'Monaco', monospace",
     lineHeight: "1.65",
     overflow: "auto",
-},
+  },
   codeOverlay: {
     position: "absolute",
     inset: 0,
