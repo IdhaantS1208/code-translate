@@ -212,10 +212,10 @@ export default function App() {
 }
 
 function renderBulletText(text) {
-    const parts = text.split(/('.*?')/g);
+    const parts = text.split(/(`.*?`)/g);
     return parts.map((part, i) =>
-        part.startsWith("'") && part.endsWith("'")
-            ? <span key={i} style={styles.bulletKeyword}>{part}</span>
+        part.startsWith("`") && part.endsWith("`")
+            ? <span key={i} style={styles.bulletKeyword}>{part.slice(1, -1)}</span>
             : part
     );
 }
@@ -913,7 +913,7 @@ syntaxHighlighter: {
   },
   bulletText: {
     fontSize: "13px",
-    color: "rgba(255,255,255,0.7)",
+    color: "#ffffff",
     lineHeight: "1.8",
     fontFamily: "'DM Sans', sans-serif",
     fontWeight: "300",

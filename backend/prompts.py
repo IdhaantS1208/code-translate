@@ -97,6 +97,7 @@ Each bullet point must:
 - Explain what it was in {source_lang}, what it became in {target_lang}, and why you made that choice
 - Be written as a direct internal thought — first person, present tense, as if you are reasoning through your own decision
 - Reference the actual code specifically — never speak in generalities
+- When referencing any specific code keyword, function name, variable, operator, or syntax element, always wrap it in backticks like `print()` or `std::cout`. Never use single quotes or any other wrapper for code references.
 
 Rules:
 - Write 5 to 7 bullet points total
