@@ -207,9 +207,18 @@ export default function App() {
     setReviewSending(false);
   }
 
-  function parseBullets(text) {
+ function parseBullets(text) {
     return text.split("•").filter((b) => b.trim().length > 0).map((b) => b.trim());
-  }
+}
+
+function renderBulletText(text) {
+    const parts = text.split(/('.*?')/g);
+    return parts.map((part, i) =>
+        part.startsWith("'") && part.endsWith("'")
+            ? <span key={i} style={styles.bulletKeyword}>{part}</span>
+            : part
+    );
+}
 
   return (
     <>
@@ -456,7 +465,7 @@ export default function App() {
                         {parseBullets(displayedThinking).map((bullet, i) => (
                           <div key={i} style={styles.bulletRow}>
                             <span style={styles.bulletDot}>•</span>
-                            <p style={styles.bulletText}>{bullet}</p>
+                            <p style={styles.bulletText}>{renderBulletText(bullet)}</p>
                           </div>
                         ))}
                       </div>
@@ -816,24 +825,24 @@ const styles = {
     flexShrink: 0,
   },
 
-  codeWrapper: {
+codeWrapper: {
     flex: 1,
     position: "relative",
     borderRadius: "10px",
-    overflow: "auto",
     border: "1px solid rgba(255,255,255,0.1)",
-  },
-  syntaxHighlighter: {
+    overflow: "hidden",
+},
+syntaxHighlighter: {
     margin: 0,
     padding: "16px",
+    minHeight: "100%",
     height: "100%",
     background: "rgba(255,255,255,0.05)",
     fontSize: "13px",
     fontFamily: "'DM Mono', 'Menlo', 'Monaco', monospace",
     lineHeight: "1.65",
-    overflowX: "auto",
-    overflowY: "auto",
-  },
+    overflow: "auto",
+},
   codeOverlay: {
     position: "absolute",
     inset: 0,
@@ -908,6 +917,11 @@ const styles = {
     lineHeight: "1.8",
     fontFamily: "'DM Sans', sans-serif",
     fontWeight: "300",
+  },
+  bulletKeyword: {
+    color: "#79b8ff",
+    fontFamily: "'DM Mono', monospace",
+    fontSize: "12px",
   },
   thinkingFiller: {
     fontSize: "13px",
