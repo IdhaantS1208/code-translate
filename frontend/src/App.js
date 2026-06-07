@@ -7,7 +7,7 @@ import python from "react-syntax-highlighter/dist/esm/languages/hljs/python";
 import cpp from "react-syntax-highlighter/dist/esm/languages/hljs/cpp";
 import ruby from "react-syntax-highlighter/dist/esm/languages/hljs/ruby";
 import swift from "react-syntax-highlighter/dist/esm/languages/hljs/swift";
-import logo from "./soptera_logo.jpg";
+
 import thinkingActive from "./thinking_active.png";
 import thinkingInactive from "./thinking_inactive.png";
 
@@ -177,7 +177,7 @@ export default function App() {
   }
 
   function handleReachOut() {
-    window.location.href = `mailto:${REACH_OUT_EMAIL}?subject=Reaching out about Soptera`;
+      window.location.href = `mailto:${REACH_OUT_EMAIL}?subject=Reaching out`;
   }
 
   function openReview() {
@@ -259,7 +259,7 @@ export default function App() {
               ) : (
                 <>
                   <div style={styles.modalHeader}>
-                    <p style={styles.modalTitle}>Review Soptera</p>
+              <p style={styles.modalTitle}>Leave a review</p>
                     <span style={styles.modalX} onClick={closeReview}>✕</span>
                   </div>
                   <p style={styles.modalSub}>How would you rate your experience?</p>
@@ -306,9 +306,9 @@ export default function App() {
         <nav style={styles.nav}>
           <div style={styles.navInner}>
             <div style={styles.navLeft}>
-              <img src={logo} alt="Soptera logo" style={styles.navLogo} />
-              <span style={styles.navName}>Soptera</span>
-              <span style={styles.navBeta}>Beta</span>
+
+
+
             </div>
             <div style={styles.navRight}>
               <span style={styles.navLink} onClick={openReview}>Review us</span>
@@ -319,12 +319,7 @@ export default function App() {
 
         {/* Hero */}
         <div style={styles.hero}>
-          <p style={styles.heroEyebrow}>Version b1</p>
-          <h1 style={styles.heroTitle}>Translate code.<br />Keep the logic.</h1>
-          <p style={styles.heroSub}>
-            Paste your code, choose a target language, and get an idiomatic
-            translation in seconds. Built for developers who think beyond one language.
-          </p>
+
         </div>
 
         {/* Translator Card */}
@@ -511,14 +506,14 @@ export default function App() {
 
           {/* Disclaimer */}
           <p style={styles.disclaimer}>
-            Always recheck translated code before usage. · Soptera can make mistakes.
+          Always recheck translated code before usage.
           </p>
 
         </div>
 
         {/* Footer */}
         <footer style={styles.footer}>
-          <span>© 2025 Soptera · Built for developers</span>
+          <span>© 2025 · Code Translator</span>
           <span>Powered by change</span>
         </footer>
 
