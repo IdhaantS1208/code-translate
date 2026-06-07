@@ -53,6 +53,10 @@ export default function App() {
   const [thinkingLoading, setThinkingLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  // Librarian Mode: show which libraries were chosen and why
+  const [librarianMode, setLibrarianMode] = useState(false);
+  // Build Mode: describe features to add on top of translation
+  const [buildInstructions, setBuildInstructions] = useState("");
 
   const [showReview, setShowReview] = useState(false);
   const [stars, setStars] = useState(0);
@@ -88,6 +92,8 @@ export default function App() {
           source_lang: sourceLang,
           target_lang: targetLang,
           code: inputCode,
+              librarian_mode: librarianMode,
+              build_instructions: buildInstructions,
         }),
       });
 
@@ -132,6 +138,8 @@ export default function App() {
               target_lang: targetLang,
               source_code: inputCode,
               translated_code: fullTranslation,
+              librarian_mode: librarianMode,
+              build_instructions: buildInstructions,
             }),
           });
 
@@ -344,6 +352,21 @@ export default function App() {
               Thinking
             </button>
 
+          {/* Librarian Mode — show library choices in the translation */}
+          <button
+            style={{
+              ...styles.thinkingBtn,
+              border: librarianMode
+                ? "1px solid rgba(255,255,255,0.5)"
+                : "1px solid rgba(255,255,255,0.15)",
+              color: librarianMode ? "#ffffff" : "rgba(255,255,255,0.35)",
+              background: "transparent",
+            }}
+            onClick={() => setLibrarianMode(!librarianMode)}
+          >
+            📚 Librarian
+          </button>
+
             <div style={styles.selectorGroup}>
               <label style={styles.label}>From</label>
               <select style={styles.select} value={sourceLang} onChange={handleSourceChange}>
@@ -378,6 +401,15 @@ export default function App() {
             </div>
 
           </div>
+
+          {/* Build Mode — describe features to add beyond the translation */}
+          <input
+            type="text"
+            style={styles.buildInput}
+            placeholder="Build Mode — describe features to add (optional)"
+            value={buildInstructions}
+            onChange={(e) => setBuildInstructions(e.target.value)}
+          />
 
           {/* Error */}
           {error && <div style={styles.error}>{error}</div>}
@@ -726,6 +758,17 @@ const styles = {
     fontFamily: "'DM Sans', sans-serif",
     transition: "all 0.2s",
   },
+    buildInput: {
+      width: "100%",
+      padding: "10px 14px",
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.15)",
+      borderRadius: "8px",
+      color: "rgba(255,255,255,0.7)",
+      fontSize: "13px",
+      outline: "none",
+      marginBottom: "16px",
+    },
   thinkingIcon: {
     width: "22px",
     height: "22px",
