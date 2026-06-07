@@ -1,10 +1,16 @@
 from config import SUPPORTED_LANGUAGES
 
-def get_translation_prompt(source_lang: str, target_lang: str, code: str) -> str:
-    
+def get_translation_prompt(
+    source_lang: str,
+    target_lang: str,
+    code: str,
+    librarian_mode: bool = False,
+    build_instructions: str = ""
+) -> str:
+
     if source_lang not in SUPPORTED_LANGUAGES or target_lang not in SUPPORTED_LANGUAGES:
         raise ValueError(f"Unsupported language. Supported languages are: {SUPPORTED_LANGUAGES}")
-    
+
     if source_lang == target_lang:
         raise ValueError("Source and target languages must be different")
 
@@ -66,8 +72,21 @@ def get_translation_prompt(source_lang: str, target_lang: str, code: str) -> str
 
     notes = language_notes.get((source_lang, target_lang), "")
 
-    prompt = f"""You are an expert code translator. Your task is to translate the following {source_lang} code into {target_lang}.
+    # Build Mode: append extra instructions for new features if provided
+    build_section = (
+        f"\nBuild instructions (features to add beyond translation):\n{build_instructions}"
+        if build_instructions.strip() else ""
+    )
 
+    # Librarian Mode: instruct the model to cite every library or header introduced
+    librarian_section = (
+        "\nLibrarian Mode is ON: After the translated code, add a comment block listing "
+        "every library or header you introduced during translation, and explain in one "
+        "sentence why each was chosen."
+        if librarian_mode else ""
+    )
+
+    prompt = f"""You are an expert code translator. Your task is to translate the following {source_lang} code into {target_lang}.
 Follow these rules strictly:
 1. Preserve the exact same functionality and logic
 2. Preserve all function and variable names where the target language allows
@@ -75,21 +94,40 @@ Follow these rules strictly:
 4. Make idiomatic choices for the target language — do not do a literal word for word translation
 5. If any part of the code cannot be cleanly translated, add a comment explaining why and what the closest equivalent is
 6. Return only the translated code with no explanation, no markdown, no code fences
-
 Language specific instructions:
-{notes}
-
+{notes}{build_section}{librarian_section}
 Code to translate:
 {code}
-
 Translated {target_lang} code:"""
 
     return prompt
 
-def get_thinking_prompt(source_lang: str, target_lang: str, source_code: str, translated_code: str) -> str:
+
+def get_thinking_prompt(
+    source_lang: str,
+    target_lang: str,
+    source_code: str,
+    translated_code: str,
+    librarian_mode: bool = False,
+    build_instructions: str = ""
+) -> str:
+
+    # Librarian Mode: instruct the model to explain its library choices in its reflection
+    librarian_note = (
+        "\n- If Librarian Mode was active, include a bullet explaining which libraries "
+        "or headers were introduced and why each was chosen."
+        if librarian_mode else ""
+    )
+
+    # Build Mode: instruct the model to distinguish translated vs newly built sections
+    build_note = (
+        f"\n- Build Mode was active (instructions: \"{build_instructions.strip()}\"). "
+        "Include a bullet that clearly distinguishes what was directly translated from the "
+        "original versus what was newly built to satisfy the build instructions."
+        if build_instructions.strip() else ""
+    )
 
     prompt = f"""You are Soptera's internal translation engine reflecting on the decisions you just made. Write your analysis as a series of bullet points, each one a first-person internal thought about a specific element of the code you translated.
-
 Each bullet point must:
 - Start with "• "
 - Be 2 to 3 lines long
@@ -98,20 +136,16 @@ Each bullet point must:
 - Be written as a direct internal thought — first person, present tense, as if you are reasoning through your own decision
 - Reference the actual code specifically — never speak in generalities
 - When referencing any specific code keyword, function name, variable, operator, or syntax element, always wrap it in backticks like `print()` or `std::cout`. Never use single quotes or any other wrapper for code references.
-
 Rules:
 - Write 1 to 7 bullet points total
 - No headers, no blank lines between bullets, no markdown formatting beyond the • character
 - Do not use filler phrases like "it is worth noting" or "it is important to understand"
 - Be direct, technical, and specific to this exact code
-- Write for an intermediate developer who understands both languages
-
+- Write for an intermediate developer who understands both languages{librarian_note}{build_note}
 Original {source_lang} code:
 {source_code}
-
 Translated {target_lang} code:
 {translated_code}
-
 Your internal thoughts:"""
 
     return prompt
