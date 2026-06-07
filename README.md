@@ -1,4 +1,4 @@
-# probable-guacamole#
+# probable-guacamole
 
 An AI-powered code translator that converts code between programming languages using Claude. It supports Python, C, C++, Ruby, and Swift, and includes optional Librarian Mode and Build Mode for extended translation capabilities.
 
