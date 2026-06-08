@@ -126,7 +126,8 @@ export default function App() {
 
       setLoading(false);
 
-      // If thinking mode is on, wait 1.5s then stream thinking
+      let capturedThinking = ""; // Captured at handleTranslate scope for the /evaluate call
+    // If thinking mode is on, wait 1.5s then stream thinking
       if (thinkingMode) {
         setThinkingLoading(true);
         await new Promise((res) => setTimeout(res, 1500));
@@ -159,6 +160,7 @@ export default function App() {
               fullThinking += chunk;
               setThinking(fullThinking);
             }
+            capturedThinking = fullThinking; // Save to outer scope for evaluate call
           }
         } catch (e) {
           setThinking("Thinking mode unavailable.");
@@ -178,7 +180,7 @@ export default function App() {
             target_lang: targetLang,
             source_code: inputCode,
             translated_code: fullTranslation,
-            thinking_output: thinkingMode ? fullThinking : "",
+            thinking_output: capturedThinking, // Contains thinking text if Thinking Mode was on, else ""
           }),
         });
         if (evalRes.ok) {
