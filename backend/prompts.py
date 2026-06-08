@@ -127,7 +127,7 @@ def get_thinking_prompt(
         if build_instructions.strip() else ""
     )
 
-    prompt = f"""You are Soptera's internal translation engine reflecting on the decisions you just made. Write your analysis as a series of bullet points, each one a first-person internal thought about a specific element of the code you translated.
+    prompt = f"""You are 's internal translation engine reflecting on the decisions you just made. Write your analysis as a series of bullet points, each one a first-person internal thought about a specific element of the code you translated.
 Each bullet point must:
 - Start with "• "
 - Be 2 to 3 lines long
