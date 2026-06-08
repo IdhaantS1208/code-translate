@@ -62,6 +62,7 @@ export default function App() {
   const [stars, setStars] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
   const [comment, setComment] = useState("");
+  const [evaluationResult, setEvaluationResult] = useState(null); // Evaluation framework: populated after each translation
   const [reviewSending, setReviewSending] = useState(false);
   const [reviewSent, setReviewSent] = useState(false);
   const [reviewError, setReviewError] = useState("");
@@ -80,6 +81,7 @@ export default function App() {
   async function handleTranslate() {
     if (isDisabled) return;
     setLoading(true);
+    setEvaluationResult(null); // Reset evaluation when a new translation starts
     setError("");
     setOutputCode("");
     setThinking("");
@@ -162,6 +164,30 @@ export default function App() {
           setThinking("Thinking mode unavailable.");
         }
         setThinkingLoading(false);
+      }
+
+      // --- Evaluation framework ---
+      // Fire /evaluate after translation completes.
+      // thinking_output is the thinking text if Thinking Mode was on, else empty string.
+      try {
+        const evalRes = await fetch(`${BACKEND_URL}/evaluate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source_lang: sourceLang,
+            target_lang: targetLang,
+            source_code: inputCode,
+            translated_code: fullTranslation,
+            thinking_output: thinkingMode ? fullThinking : "",
+          }),
+        });
+        if (evalRes.ok) {
+          const evalData = await evalRes.json();
+          setEvaluationResult(evalData); // Scores are floats, e.g. 8.7 — displayed as X.X/10
+        }
+      } catch (evalErr) {
+        // Non-fatal: evaluation errors do not surface to user
+        console.warn("Evaluation failed:", evalErr);
       }
 
     } catch (err) {
@@ -503,6 +529,28 @@ export default function App() {
             )}
 
           </div>
+
+          {/* --- Translation Evaluation Panel --- */}
+          {/* Scores are floats (e.g. 8.7) displayed as X.X/10 — no truncation. */}
+          {evaluationResult && (
+            <div style={styles.evaluationPanel}>
+              <p style={styles.evaluationTitle}>Translation Evaluation</p>
+              {[
+                { key: "logic_preservation", label: "Logic Preservation" },
+                { key: "idiomatic_quality", label: "Idiomatic Quality" },
+                { key: "explainability", label: "Explainability" },
+              ].map(({ key, label }) => {
+                const dim = evaluationResult[key];
+                return dim ? (
+                  <div key={key} style={styles.evaluationRow}>
+                    <span style={styles.evaluationDimName}>{label}</span>
+                    <span style={styles.evaluationScore}>{dim.score}/10</span>
+                    <span style={styles.evaluationJustification}>{dim.justification}</span>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          )}
 
           {/* Disclaimer */}
           <p style={styles.disclaimer}>
@@ -976,4 +1024,44 @@ const styles = {
     fontSize: "13px",
     color: "rgba(255,255,255,0.3)",
   },
+  evaluationPanel: {
+    marginTop: "24px",
+    padding: "16px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.03)",
+  },
+  evaluationTitle: {
+    fontSize: "12px",
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.5)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: "12px",
+  },
+  evaluationRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "12px",
+    marginBottom: "10px",
+    fontSize: "13px",
+    color: "rgba(255,255,255,0.75)",
+  },
+  evaluationDimName: {
+    minWidth: "160px",
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.9)",
+  },
+  evaluationScore: {
+    minWidth: "52px",
+    fontWeight: "600",
+    color: "#a78bfa",
+    fontVariantNumeric: "tabular-nums",
+  },
+  evaluationJustification: {
+    flex: 1,
+    color: "rgba(255,255,255,0.6)",
+    lineHeight: "1.5",
+  },
+
 };
