@@ -45,4 +45,37 @@ cd backend
 cp .env.example .env
 ```
 
+### 3. Install backend dependencies
+
+From the `backend/` directory:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Install frontend dependencies
+
+From the `frontend/` directory:
+
+```bash
+cd ../frontend
+npm install
+```
+
+### 5. Run the app
+
+Start the backend (from `backend/`):
+
+```bash
+uvicorn main:app --reload
+```
+
+Start the frontend (from `frontend/`, in a separate terminal):
+
+```bash
+npm start
+```
+
+The app will be available at [http://localhost:3000](http://localhost:3000). The backend runs on port 8000 by default.
+
 Open `.env` and replace `your_api_key_here` with your actual key:
