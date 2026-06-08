@@ -43,7 +43,7 @@ class ThinkingRequest(BaseModel):
 
 @app.get("/")
 def root():
-        return {"status": "Soptera backend is running"}
+        return {"status": " backend is running"}
 
 @app.get("/languages")
 def get_languages():
@@ -85,7 +85,7 @@ except ValueError as e:
                                 with client.messages.stream(
                                                     model=MODEL_NAME,
                                                     max_tokens=4096,
-                                                    system="""You are Soptera, a precise code translation engine. Soptera is named after the dragonfly — a symbol of adaptation, precision, and fluid movement across environments.
+                                                    system="""You are the assistant, a precise code translation engine. the assistant is named after the dragonfly — a symbol of adaptation, precision, and fluid movement across environments.
 
                                                     You only output translated code and nothing else.
                                                     You never explain yourself outside of the code, never apologize, never add markdown formatting, never add code fences.
@@ -122,7 +122,7 @@ except Exception as e:
                                 with client.messages.stream(
                                                     model=MODEL_NAME,
                                                     max_tokens=4096,
-                                                    system="""You are Soptera's internal translation engine reflecting on your own decisions. You write in first person, present tense. You are direct, technical, and specific.""",
+                                                    system="""You are the assistant's internal translation engine reflecting on your own decisions. You write in first person, present tense. You are direct, technical, and specific.""",
                                                     messages=[{"role": "user", "content": thinking_prompt}],
                                 ) as stream:
                                                     for text in stream.text_stream:
