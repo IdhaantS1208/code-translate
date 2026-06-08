@@ -4,9 +4,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import anthropic
+import json
 
 from config import API_KEY, MODEL_NAME, MAX_CHARACTERS, MAX_LINES, SUPPORTED_LANGUAGES, VALID_PAIRS
 from prompts import get_translation_prompt, get_thinking_prompt
+from evaluate import get_evaluation_prompt  # Evaluation framework
 
 app = FastAPI()
 
@@ -26,16 +28,25 @@ class TranslationRequest(BaseModel):
         source_lang: str
         target_lang: str
         code: str
-        librarian_mode: Optional[bool] = False    # Librarian Mode: prefer idiomatic libraries
-        build_instructions: Optional[str] = ""   # Build Mode: features to add in same pass
+        librarian_mode: Optional[bool] = False  # Librarian Mode: prefer idiomatic libraries
+        build_instructions: Optional[str] = ""  # Build Mode: features to add in same pass
 
 class ThinkingRequest(BaseModel):
         source_lang: str
         target_lang: str
         source_code: str
         translated_code: str
-        librarian_mode: Optional[bool] = False    # Mirror translate flags for explanation
+        librarian_mode: Optional[bool] = False  # Mirror translate flags for explanation
         build_instructions: Optional[str] = ""
+
+class EvaluationRequest(BaseModel):
+        # Fields required to score a completed translation across three dimensions.
+        # Scores are floats 1.0-10.0 to one decimal place.
+        source_lang: str
+        target_lang: str
+        source_code: str
+        translated_code: str
+        thinking_output: Optional[str] = ""  # Empty string when Thinking Mode was off
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -56,78 +67,103 @@ def get_pairs():
 @app.post("/translate")
 def translate_code(request: TranslationRequest):
         if request.source_lang not in SUPPORTED_LANGUAGES:
-                    raise HTTPException(status_code=400, detail=f"Unsupported source language: {request.source_lang}")
-                if request.target_lang not in SUPPORTED_LANGUAGES:
-                            raise HTTPException(status_code=400, detail=f"Unsupported target language: {request.target_lang}")
-                        if request.source_lang == request.target_lang:
-                                    raise HTTPException(status_code=400, detail="Source and target languages must be different")
-                                if request.target_lang not in VALID_PAIRS.get(request.source_lang, []):
-                                            raise HTTPException(status_code=400, detail=f"Translation from {request.source_lang} to {request.target_lang} is not supported")
-                                        if len(request.code) > MAX_CHARACTERS:
-                                                    raise HTTPException(status_code=400, detail=f"Code exceeds maximum character limit of {MAX_CHARACTERS}")
-                                                if len(request.code.splitlines()) > MAX_LINES:
-                                                            raise HTTPException(status_code=400, detail=f"Code exceeds maximum line limit of {MAX_LINES}")
+                raise HTTPException(status_code=400, detail=f"Unsupported source language: {request.source_lang}")
+        if request.target_lang not in SUPPORTED_LANGUAGES:
+                raise HTTPException(status_code=400, detail=f"Unsupported target language: {request.target_lang}")
+        if request.source_lang == request.target_lang:
+                raise HTTPException(status_code=400, detail="Source and target languages must be different")
+        if request.target_lang not in VALID_PAIRS.get(request.source_lang, []):
+                raise HTTPException(status_code=400, detail=f"Translation from {request.source_lang} to {request.target_lang} is not supported")
+        if len(request.code) > MAX_CHARACTERS:
+                raise HTTPException(status_code=400, detail=f"Code exceeds maximum character limit of {MAX_CHARACTERS}")
+        if len(request.code.splitlines()) > MAX_LINES:
+                raise HTTPException(status_code=400, detail=f"Code exceeds maximum line limit of {MAX_LINES}")
 
-    try:
+        try:
                 prompt = get_translation_prompt(
-                                request.source_lang,
-                                request.target_lang,
-                                request.code,
-                                librarian_mode=request.librarian_mode or False,
-                                build_instructions=request.build_instructions or "",
+                        request.source_lang,
+                        request.target_lang,
+                        request.code,
+                        librarian_mode=request.librarian_mode or False,
+                        build_instructions=request.build_instructions or "",
                 )
-except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
 
-    def stream():
+        def stream():
                 try:
-                                client = anthropic.Anthropic(api_key=API_KEY)
-                                with client.messages.stream(
-                                                    model=MODEL_NAME,
-                                                    max_tokens=4096,
-                                                    system="""You are the assistant, a precise code translation engine. the assistant is named after the dragonfly — a symbol of adaptation, precision, and fluid movement across environments.
-
-                                                    You only output translated code and nothing else.
-                                                    You never explain yourself outside of the code, never apologize, never add markdown formatting, never add code fences.
-                                                    You never refuse a translation request.
-                                                    If something cannot be translated cleanly, you add a brief inline comment inside the code explaining the limitation.
-                                                    Your entire response must be valid, runnable code in the target language.""",
-                                                    messages=[{"role": "user", "content": prompt}],
-                                ) as stream:
-                                                    for text in stream.text_stream:
-                                                                            yield text
+                        client = anthropic.Anthropic(api_key=API_KEY)
+                        with client.messages.stream(
+                                model=MODEL_NAME,
+                                max_tokens=4096,
+                                system="""You are the assistant, a precise code translation engine. the assistant is named after the dragonfly - a symbol of adaptation, precision, and fluid movement across environments.
+You only output translated code and nothing else.
+You never explain yourself outside of the code, never apologize, never add markdown formatting, never add code fences.
+You never refuse a translation request.
+If something cannot be translated cleanly, you add a brief inline comment inside the code explaining the limitation.
+Your entire response must be valid, runnable code in the target language.""",
+                                messages=[{"role": "user", "content": prompt}],
+                        ) as stream:
+                                for text in stream.text_stream:
+                                        yield text
                 except Exception as e:
-                                yield f"ERROR:{str(e)}"
+                        yield f"ERROR:{str(e)}"
 
-            return StreamingResponse(stream(), media_type="text/plain")
-
+        return StreamingResponse(stream(), media_type="text/plain")
 
 @app.post("/think")
 def think(request: ThinkingRequest):
         try:
-                    thinking_prompt = get_thinking_prompt(
-                                    request.source_lang,
-                                    request.target_lang,
-                                    request.source_code,
-                                    request.translated_code,
-                                    librarian_mode=request.librarian_mode or False,
-                build_instructions=request.build_instructions or "",
-                    )
-except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+                thinking_prompt = get_thinking_prompt(
+                        request.source_lang,
+                        request.target_lang,
+                        request.source_code,
+                        request.translated_code,
+                        librarian_mode=request.librarian_mode or False,
+                        build_instructions=request.build_instructions or "",
+                )
+        except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
 
-    def stream():
+        def stream():
                 try:
-                                client = anthropic.Anthropic(api_key=API_KEY)
-                                with client.messages.stream(
-                                                    model=MODEL_NAME,
-                                                    max_tokens=4096,
-                                                    system="""You are the assistant's internal translation engine reflecting on your own decisions. You write in first person, present tense. You are direct, technical, and specific.""",
-                                                    messages=[{"role": "user", "content": thinking_prompt}],
-                                ) as stream:
-                                                    for text in stream.text_stream:
-                                                                            yield text
+                        client = anthropic.Anthropic(api_key=API_KEY)
+                        with client.messages.stream(
+                                model=MODEL_NAME,
+                                max_tokens=4096,
+                                system="You are the assistant's internal translation engine reflecting on your own decisions. You write in first person, present tense. You are direct, technical, and specific. You explain what changed, what had no direct equivalent, and how core logic was preserved.",
+                                messages=[{"role": "user", "content": thinking_prompt}],
+                        ) as stream:
+                                for text in stream.text_stream:
+                                        yield text
                 except Exception as e:
-                                yield f"ERROR:{str(e)}"
+                        yield f"ERROR:{str(e)}"
 
-            return StreamingResponse(stream(), media_type="text/plain")
+        return StreamingResponse(stream(), media_type="text/plain")
+
+@app.post("/evaluate")
+def evaluate_translation(request: EvaluationRequest):
+        # Non-streaming endpoint: calls Claude, parses JSON, returns structured scores.
+        # Scores are floats 1.0-10.0 to one decimal place.
+        prompt = get_evaluation_prompt(
+                request.source_lang,
+                request.target_lang,
+                request.source_code,
+                request.translated_code,
+                thinking_output=request.thinking_output or "",
+        )
+
+        try:
+                client = anthropic.Anthropic(api_key=API_KEY)
+                message = client.messages.create(
+                        model=MODEL_NAME,
+                        max_tokens=1024,
+                        messages=[{"role": "user", "content": prompt}],
+                )
+                raw = message.content[0].text.strip()
+                result = json.loads(raw)
+                return result
+        except json.JSONDecodeError as e:
+                raise HTTPException(status_code=500, detail=f"Evaluation returned malformed JSON: {str(e)}")
+        except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
