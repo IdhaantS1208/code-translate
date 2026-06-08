@@ -35,12 +35,12 @@ const PAIRS = {
   "Swift":  ["C++", "Ruby"],
 };
 
-const BACKEND_URL = "https://soptera-backend.onrender.com";
+const BACKEND_URL = "http://localhost:8000";
 
 const EMAILJS_SERVICE_ID = "service_nwlb0jm";
 const EMAILJS_TEMPLATE_ID = "template_73dyen9";
 const EMAILJS_PUBLIC_KEY = "UilYbd3YaZYgCqPkF";
-const REACH_OUT_EMAIL = "soptera.reviews@gmail.com";
+const REACH_OUT_EMAIL = "";
 
 export default function App() {
   const [sourceLang, setSourceLang] = useState("Python");
