@@ -79,3 +79,8 @@ npm start
 The app will be available at [http://localhost:3000](http://localhost:3000). The backend runs on port 8000 by default.
 
 Open `.env` and replace `your_api_key_here` with your actual key:
+
+## Contributing
+
+Open to contributions. See open issues for ideas or raise 
+your own.
